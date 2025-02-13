@@ -42,6 +42,8 @@ struct MessagesView: View {
             }
             .padding(.vertical, 10)
             .ignoresSafeArea()
+            
+            //MARK: FAIRE PLUTOT UNE ZSTACK ET METTRE LE TEXTFIELD AU DESSUS AVEC UN FOND FLOUTÉ 
         }
     }
 }

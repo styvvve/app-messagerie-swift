@@ -55,6 +55,8 @@ class FirebaseRepository {
         return dialog
     }
     
+    //MARK: la reference qu'on va utiliser dans les codes à suivre
+    let reference = Database.database(url: "https://messenger-2fdfb-default-rtdb.europe-west1.firebasedatabase.app").reference()
     //méthode pour envoyer profilePicture dans le cloud
     func uploadProfilePicture(imageData: Data, userID: String, completion: @escaping (Result<URL, FirebaseImageError>) -> Void) {
         let storageRef = Storage.storage().reference()
@@ -83,7 +85,6 @@ class FirebaseRepository {
     }
     
     func saveUserData(user: UserModel) {
-        let reference = Database.database(url: "https://messenger-2fdfb-default-rtdb.europe-west1.firebasedatabase.app").reference()
         var dialog = FirebaseDialog(success: true, message: "")
         var profilePictureURL: URL?
         //pour l'image on la convertit d'abord en data
@@ -121,5 +122,103 @@ class FirebaseRepository {
             "profilePictureURL": profilePictureURL?.absoluteString ?? "",
             "contacts": [:]
         ])
+    }
+    
+    func createConversation(userA: UserModel, userB: UserModel, completion: @escaping (String) -> Void) {
+        let conversationId = UUID().uuidString
+        let conversationData: [String:Any] = [
+            "id": conversationId,
+            "userAId": userA.id,
+            "userBId": userB.id,
+            "lastMessageTimestamp": Date().timeIntervalSince1970
+        ]
+        
+        reference.child("conversations").child(conversationId).setValue(conversationData) { error, _ in
+            if let error = error {
+                //une erreur jsp ce que j'en fais
+                print("\(error.localizedDescription)")
+            }else {
+                completion(conversationId)
+            }
+        }
+    }
+    
+    func sendMessage(conversationId: String, sender: UserModel, text: String) {
+        let messageId = UUID().uuidString
+        let messageData: [String:Any] = [
+            "id": messageId,
+            "senderId": sender.id,
+            "text": text,
+            "timestamp": Date().timeIntervalSince1970,
+            "delivranceState": "sending"
+        ]
+        
+        reference.child("messages").child(conversationId).child(messageId).setValue(messageData) { error, _ in
+            if let error = error {
+                print("Error sending message: \(error.localizedDescription)")
+            }else {
+                self.reference.child("messages").child(conversationId).child(messageId).updateChildValues(["delivranceState": "sent"])
+                
+                self.reference.child("conversations").child(conversationId).updateChildValues(["lastMessageTimestamp": Date().timeIntervalSince1970])
+            }
+        }
+    }
+    
+    //fonctions pour recuperer les messages
+    func listenForMessages(conversationId: String, completion: @escaping ([MessageModel]) -> Void) {
+        reference.child("messages").child(conversationId).observe(.value) { snapshot in
+            var messages: [MessageModel] = []
+            
+            for child in snapshot.children {
+                if let snap = child as? DataSnapshot,
+                   let data = snap.value as? [String: Any],
+                    let senderId = data["senderId"] as? String,
+                    let text = data["text"] as? String,
+                    let timestamp = data["timestamp"] as? TimeInterval,
+                   let delivranceStateRaw = data["delivranceState"] as? String {
+                    let delivranceState: DelivranceState = {
+                        switch delivranceStateRaw {
+                        case "sending": return .sending
+                        case "sent": return .sent
+                        case "notTransmitted": return .notTransmitted
+                        default: return .sent
+                        }
+                    }()
+                    
+                    let sender: Sender = senderId == conversationId ? .sender : .receiver
+                    
+                    let message = MessageModel(date: Date(timeIntervalSince1970: timestamp), whoSent: sender, text: text, delivranceState: delivranceState)
+                    messages.append(message)
+                }
+            }
+            
+            messages.sort { $0.date < $1.date } //trier les messages
+            completion(messages)
+        }
+    }
+    
+    //et enfin fonction pour recuperer les conversations d'un individu
+    func getConversations(userId: String, completion: @escaping ([ConversationModel]) -> Void) {
+        reference.child("conversations").observe(.value) { snapshot in
+            var conversations: [ConversationModel] = []
+            
+            for child in snapshot.children {
+                if let snap = child as? DataSnapshot,
+                   let data = snap.value as? [String: Any],
+                    let id = data["id"] as? String,
+                    let userAId = data["userAId"] as? String,
+                    let userBId = data["userBId"] as? String,
+                   let lastMessageTimestamp = data["lastMessageTimestamp"] as? TimeInterval {
+                    if userAId == userId || userBId == userId {
+                        let conversation = ConversationModel(id: id, userAid: userAId, userBid: userBId, lastMessageTimestamp: Date(timeIntervalSince1970: lastMessageTimestamp))
+                        conversations.append(conversation)
+                    }
+                }
+            }
+            
+            //on trie les conversations selon le dernier message envoyé
+            conversations.sort { $0.lastMessageTimestamp! > $1.lastMessageTimestamp! }
+            completion(conversations)
+        }
     }
 }

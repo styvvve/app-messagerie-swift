@@ -39,7 +39,7 @@ struct onBoardingView: View {
     @Binding var navigationPath: NavigationPath
     
     //on va sauvegarder dans le modèle de User
-    @ObservedObject private var newUser = UserModel(id: "", firstName: "", lastname: "", profilePicture: nil, contacts: [])
+    @ObservedObject private var newUser = UserModel(firstName: "", lastname: "", profilePicture: nil, contacts: [])
     
     //instance de repo
     let firebaseRepo = FirebaseRepository()

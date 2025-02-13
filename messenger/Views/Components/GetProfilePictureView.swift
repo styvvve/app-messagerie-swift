@@ -6,10 +6,21 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct GetProfilePictureView: View {
     
+    //pour prendre la photo avec la camera
+    @State private var showCamera = false
+    
+    //l'image
     @Binding var profilePicture: UIImage?
+    
+    
+    //pour la selectionner depuis la librarie
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var selectedImage: Image?
+    
     
     var body: some View {
         VStack {
@@ -27,22 +38,35 @@ struct GetProfilePictureView: View {
             
             HStack {
                 Button {
-                    
+                    showCamera = true
                 }label: {
                     Text("Take a picture")
                         .bold()
                         .font(.system(size: 18))
                 }
                 Spacer()
-                Button {
-                    
-                }label: {
-                    Text("Add from library")
-                        .bold()
-                        .font(.system(size: 18))
-                }
+                PhotosPicker("Add from library", selection: $pickerItem)
+                    .bold()
+                    .font(.system(size: 18))
             }
             .padding()
+        }
+        .sheet(isPresented: $showCamera, content: {
+            CameraView { pickedImage in
+                if let uiImage = pickedImage {
+                    profilePicture = uiImage
+                }
+                showCamera = false 
+            }
+        })
+        .onChange(of: pickerItem) {
+            Task {
+                self.selectedImage = try await pickerItem?.loadTransferable(type: Image.self)
+                if let uiImage = selectedImage?.toUIImage() {
+                   //conversion réussie
+                    profilePicture = uiImage
+                }
+            }
         }
     }
 }

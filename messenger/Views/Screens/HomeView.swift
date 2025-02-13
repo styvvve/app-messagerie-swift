@@ -13,7 +13,7 @@ struct HomeView: View {
         VStack {
             TabView {
                 Tab("Chats", systemImage: "bubble.circle") {
-                    ChatsView()
+                    ChatsView(user: UserModel.sampleUsers[0])
                 }
                 
                 Tab("Settings", systemImage: "gear") {
